@@ -1,5 +1,6 @@
 package com.nexpath.ai;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +26,7 @@ public class RoadmapAIService {
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     // ==============================
-    // ROADMAP
+    // 🚀 ROADMAP
     // ==============================
     public Map<String, Object> generateRoadmap(
             String currentRole,
@@ -34,22 +35,14 @@ public class RoadmapAIService {
             List<String> skills,
             String timeline
     ) {
-
         String prompt = """
-        You are a senior career mentor.
+        Return ONLY JSON.
 
-        Generate a structured JSON roadmap.
-
-        Return ONLY JSON in this format:
         {
           "title": "",
           "summary": "",
-          "phases": [
-            {
-              "phase": "",
-              "topics": []
-            }
-          ]
+          "estimatedDuration": "",
+          "phases": []
         }
 
         Current Role: %s
@@ -59,19 +52,17 @@ public class RoadmapAIService {
         Timeline: %s
         """.formatted(currentRole, targetRole, experience, skills, timeline);
 
-        String response = callOpenRouter(prompt);
-        return parseJson(response);
+        return parseJson(callWithFallback(prompt));
     }
 
     // ==============================
-    // SKILL GAP
+    // 🔍 SKILL GAP
     // ==============================
     public Map<String, Object> analyzeSkillGap(String targetRole, String currentSkills) {
 
         String prompt = """
-        Analyze skill gap.
+        Return ONLY JSON:
 
-        Return JSON:
         {
           "missingSkills": [],
           "strengths": [],
@@ -82,119 +73,132 @@ public class RoadmapAIService {
         Current Skills: %s
         """.formatted(targetRole, currentSkills);
 
-        String response = callOpenRouter(prompt);
-        return parseJson(response);
+        return parseJson(callWithFallback(prompt));
     }
 
     // ==============================
-    // RESUME SCORE
+    // 📄 RESUME SCORE
     // ==============================
     public Map<String, Object> scoreResume(String resumeText, String targetRole) {
 
         String prompt = """
-       You are an ATS resume evaluator.
+        Return ONLY JSON:
 
-       STRICT RULES:
-      - Return ONLY valid JSON
-      - DO NOT add explanation
-      - DO NOT add text outside JSON
-      - score must be between 0 and 100
-
-      Format:
-     {
-      "score": number,
-      "feedback": ["point1", "point2"],
-      "improvements": ["point1", "point2"]
-     }
-
-     Evaluate this resume:
-
-     %s
-     """.formatted(resumeText);
-        String response = callOpenRouter(prompt);
-        return parseJson(response);
-    }
-
-    // ==============================
-    // OPENROUTER CALL
-    // ==============================
-    private String callOpenRouter(String prompt) {
-
-        try {
-            log.info("OpenRouter Key Loaded: {}", apiKey != null && !apiKey.isBlank());
-
-            String requestBody = objectMapper.writeValueAsString(
-                    Map.of(
-                            "model", "openai/gpt-3.5-turbo",
-                            "messages", List.of(
-                                    Map.of("role", "user", "content", prompt)
-                            )
-                    )
-            );
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://openrouter.ai/api/v1/chat/completions"))
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                    .build();
-
-            log.info("Calling OpenRouter API...");
-
-            HttpResponse<String> response =
-                    httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            log.info("OpenRouter Response received");
-            log.debug("Raw Response: {}", response.body());
-
-            Map<String, Object> json = objectMapper.readValue(response.body(), Map.class);
-
-            // 🔥 HANDLE ERROR RESPONSE
-            if (json.containsKey("error")) {
-                log.error("OpenRouter API Error: {}", json.get("error"));
-                return getFallbackResponse();
-            }
-
-            List<Map<String, Object>> choices =
-                    (List<Map<String, Object>>) json.get("choices");
-
-            Map<String, Object> message =
-                    (Map<String, Object>) choices.get(0).get("message");
-
-            return message.get("content").toString();
-
-        } catch (Exception e) {
-            log.error("OpenRouter API error", e);
-            return getFallbackResponse();
+        {
+          "score": 0,
+          "weaknesses": [],
+          "improvements": [],
+          "atsSuggestions": [],
+          "strengths": []
         }
+
+        Target Role: %s
+        Resume: %s
+        """.formatted(targetRole, resumeText);
+
+        return parseJson(callWithFallback(prompt));
     }
 
     // ==============================
-    // JSON PARSER
+    // 🔥 FALLBACK + RETRY
+    // ==============================
+    private String callWithFallback(String prompt) {
+
+        List<String> models = List.of(
+                "openai/gpt-4o-mini",
+                "mistral/mistral-large"
+        );
+
+        for (String model : models) {
+            try {
+                return callOpenRouter(model, prompt);
+            } catch (Exception e) {
+                log.warn("Model failed: {}", model);
+            }
+        }
+
+        return getFallbackResponse();
+    }
+
+    // ==============================
+    // 🌐 OPENROUTER CALL
+    // ==============================
+    private String callOpenRouter(String model, String prompt) throws Exception {
+
+        String requestBody = objectMapper.writeValueAsString(
+                Map.of(
+                        "model", model,
+                        "messages", List.of(
+                                Map.of("role", "user", "content", prompt)
+                        )
+                )
+        );
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://openrouter.ai/api/v1/chat/completions"))
+                .header("Authorization", "Bearer " + apiKey)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .build();
+
+        HttpResponse<String> response =
+                httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        JsonNode root = objectMapper.readTree(response.body());
+
+        return root
+                .path("choices")
+                .get(0)
+                .path("message")
+                .path("content")
+                .asText();
+    }
+
+    // ==============================
+    // 🧠 PARSER
     // ==============================
     private Map<String, Object> parseJson(String response) {
         try {
-            return objectMapper.readValue(response, Map.class);
+            log.debug("🔍 Raw AI Response: {}", response);
+
+            // 🔥 STEP 1: Remove markdown
+            String cleaned = response.trim();
+
+            if (cleaned.startsWith("```")) {
+                cleaned = cleaned.replaceAll("```json", "")
+                        .replaceAll("```", "")
+                        .trim();
+            }
+
+            // 🔥 STEP 2: Extract ONLY JSON object (important fix)
+            int start = cleaned.indexOf("{");
+            int end = cleaned.lastIndexOf("}");
+
+            if (start == -1 || end == -1) {
+                throw new RuntimeException("Invalid JSON format");
+            }
+
+            cleaned = cleaned.substring(start, end + 1);
+
+            // 🔥 STEP 3: Parse safely
+            Map<String, Object> parsed = objectMapper.readValue(cleaned, Map.class);
+
+            log.info("✅ JSON parsed successfully");
+
+            return parsed;
+
         } catch (Exception e) {
-            log.warn("Invalid JSON from AI, returning fallback");
+            log.error("❌ JSON parsing failed", e);
+
             return Map.of(
-                    "title", "Fallback Roadmap",
-                    "summary", "AI response could not be parsed",
+                    "title", "Error generating roadmap",
+                    "summary", "AI returned invalid data. Please retry.",
+                    "estimatedDuration", "N/A",
                     "phases", List.of()
             );
         }
     }
-
-    // ==============================
-    // FALLBACK RESPONSE
-    // ==============================
     private String getFallbackResponse() {
-        return """
-        {
-          "title": "Fallback Roadmap",
-          "summary": "AI service temporarily unavailable",
-          "phases": []
-        }
-        """;
+        return "{}";
     }
 }
