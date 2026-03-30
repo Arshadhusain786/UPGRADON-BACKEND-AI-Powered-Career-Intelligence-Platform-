@@ -1,14 +1,8 @@
 package com.nexpath.services;
 
-
 import com.nexpath.ai.RoadmapAIService;
-
-import com.nexpath.dtos.request.ResumeScoreRequest;
-import com.nexpath.dtos.request.RoadmapRequest;
-import com.nexpath.dtos.request.SkillGapRequest;
-import com.nexpath.dtos.response.ResumeScoreResponse;
-import com.nexpath.dtos.response.RoadmapResponse;
-import com.nexpath.dtos.response.SkillGapResponse;
+import com.nexpath.dtos.request.*;
+import com.nexpath.dtos.response.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -19,41 +13,61 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AiService {
 
-    private final RoadmapAIService roadmapAIService;
+    private final RoadmapAIService ai;
 
-    // 🔹 ROADMAP
+    // =========================
+    // 🚀 ROADMAP
+    // =========================
     public RoadmapResponse generateRoadmap(RoadmapRequest request) {
 
-        Map<String, Object> result = roadmapAIService.generateRoadmap(
-                "Student", // current role (can improve later)
+        Map<String, Object> map = ai.generateRoadmap(
+                "Student",
                 request.getTargetRole(),
                 request.getExperienceLevel(),
                 List.of(request.getCurrentSkills().split(",")),
                 "3-6 months"
         );
 
-        return new RoadmapResponse(result);
+        RoadmapResponse res = new RoadmapResponse();
+        res.setTitle((String) map.get("title"));
+        res.setSummary((String) map.get("summary"));
+        res.setEstimatedDuration((String) map.get("estimatedDuration"));
+        res.setPhases((List<Map<String, Object>>) map.get("phases"));
+
+        return res;
     }
 
-    // 🔹 SKILL GAP
+    // =========================
+    // 🔍 SKILL GAP
+    // =========================
     public SkillGapResponse analyzeSkillGap(SkillGapRequest request) {
 
-        Map<String, Object> result = roadmapAIService.analyzeSkillGap(
-                request.getTargetRole(),
-                request.getCurrentSkills()
-        );
+        Map<String, Object> map =
+                ai.analyzeSkillGap(request.getTargetRole(), request.getCurrentSkills());
 
-        return new SkillGapResponse(result);
+        SkillGapResponse res = new SkillGapResponse();
+        res.setMissingSkills((List<String>) map.get("missingSkills"));
+        res.setStrengths((List<String>) map.get("strengths"));
+        res.setRecommendations((List<String>) map.get("recommendations"));
+
+        return res;
     }
 
-    // 🔹 RESUME SCORE
+    // =========================
+    // 📄 RESUME SCORE
+    // =========================
     public ResumeScoreResponse scoreResume(ResumeScoreRequest request) {
 
-        Map<String, Object> result = roadmapAIService.scoreResume(
-                request.getResumeText(),
-                "General Role"
-        );
+        Map<String, Object> map =
+                ai.scoreResume(request.getResumeText(), "General Role");
 
-        return new ResumeScoreResponse(result);
+        ResumeScoreResponse res = new ResumeScoreResponse();
+        res.setScore((Integer) map.get("score"));
+        res.setWeaknesses((List<String>) map.get("weaknesses"));
+        res.setImprovements((List<String>) map.get("improvements"));
+        res.setAtsSuggestions((List<String>) map.get("atsSuggestions"));
+        res.setStrengths((List<String>) map.get("strengths"));
+
+        return res;
     }
 }
