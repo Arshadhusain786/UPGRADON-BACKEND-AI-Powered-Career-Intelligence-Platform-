@@ -9,7 +9,7 @@ import java.util.Map;
 @Data
 @NoArgsConstructor
 public class SkillGapResponse {
-//added
+//add
     private List<String> missingSkills;
     private List<String> strengths;
     private List<String> recommendations;
