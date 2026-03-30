@@ -11,10 +11,7 @@ import com.nexpath.services.AiService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/ai")
@@ -23,21 +20,48 @@ public class AiController {
 
     private final AiService aiService;
 
+    // =========================
+    // 🚀 ROADMAP
+    // =========================
     @PostMapping("/roadmap")
     @PreAuthorize("hasAnyRole('STUDENT','MENTOR','ADMIN')")
     public ApiResponse<RoadmapResponse> roadmap(@Valid @RequestBody RoadmapRequest request) {
-        return ApiResponse.success("Roadmap generated", aiService.generateRoadmap(request));
+
+        RoadmapResponse roadmap = aiService.generateRoadmap(request);
+
+        return ApiResponse.success(
+                "Roadmap generated successfully",
+                roadmap
+        );
     }
 
+    // =========================
+    // 🔍 SKILL GAP
+    // =========================
     @PostMapping("/skill-gap")
     @PreAuthorize("hasAnyRole('STUDENT','MENTOR','ADMIN')")
     public ApiResponse<SkillGapResponse> skillGap(@Valid @RequestBody SkillGapRequest request) {
-        return ApiResponse.success("Skill gap analyzed", aiService.analyzeSkillGap(request));
+
+        SkillGapResponse response = aiService.analyzeSkillGap(request);
+
+        return ApiResponse.success(
+                "Skill gap analyzed successfully",
+                response
+        );
     }
 
+    // =========================
+    // 📄 RESUME SCORE
+    // =========================
     @PostMapping("/resume-score")
     @PreAuthorize("hasAnyRole('STUDENT','MENTOR','ADMIN')")
     public ApiResponse<ResumeScoreResponse> resumeScore(@Valid @RequestBody ResumeScoreRequest request) {
-        return ApiResponse.success("Resume scored", aiService.scoreResume(request));
+
+        ResumeScoreResponse response = aiService.scoreResume(request);
+
+        return ApiResponse.success(
+                "Resume scored successfully",
+                response
+        );
     }
 }

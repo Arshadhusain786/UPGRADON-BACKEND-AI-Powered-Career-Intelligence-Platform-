@@ -1,12 +1,12 @@
 package com.nexpath.dtos.response;
 
-import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
 @Data
-@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL) // ✅ removes null fields from JSON
 public class ApiResponse<T> {
 
     private boolean success;
@@ -14,18 +14,49 @@ public class ApiResponse<T> {
     private T data;
     private LocalDateTime timestamp;
 
-    // ✅ SUCCESS
+    // =========================
+    // ✅ SUCCESS (WITH DATA)
+    // =========================
     public static <T> ApiResponse<T> success(String message, T data) {
-        return new ApiResponse<>(true, message, data, LocalDateTime.now());
+        ApiResponse<T> response = new ApiResponse<>();
+        response.success = true;
+        response.message = message;
+        response.data = data;
+        response.timestamp = LocalDateTime.now();
+        return response;
     }
 
-    // ✅ ERROR WITHOUT DATA
+    // =========================
+    // ✅ SUCCESS (NO DATA)
+    // =========================
+    public static <T> ApiResponse<T> success(String message) {
+        ApiResponse<T> response = new ApiResponse<>();
+        response.success = true;
+        response.message = message;
+        response.timestamp = LocalDateTime.now();
+        return response;
+    }
+
+    // =========================
+    // ❌ ERROR (NO DATA)
+    // =========================
     public static <T> ApiResponse<T> error(String message) {
-        return new ApiResponse<>(false, message, null, LocalDateTime.now());
+        ApiResponse<T> response = new ApiResponse<>();
+        response.success = false;
+        response.message = message;
+        response.timestamp = LocalDateTime.now();
+        return response;
     }
 
-    // ✅ ERROR WITH DATA (GENERIC — IMPORTANT FIX)
+    // =========================
+    // ❌ ERROR (WITH DATA)
+    // =========================
     public static <T> ApiResponse<T> error(String message, T data) {
-        return new ApiResponse<>(false, message, data, LocalDateTime.now());
+        ApiResponse<T> response = new ApiResponse<>();
+        response.success = false;
+        response.message = message;
+        response.data = data;
+        response.timestamp = LocalDateTime.now();
+        return response;
     }
 }
