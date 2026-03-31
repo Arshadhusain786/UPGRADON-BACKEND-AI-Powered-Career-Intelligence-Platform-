@@ -192,7 +192,7 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
-        //info
+        //information
 
         log.info("Password updated for user: {}", user.getEmail());
     }
