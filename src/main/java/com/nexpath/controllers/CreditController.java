@@ -4,6 +4,7 @@ import com.nexpath.dtos.request.PaymentVerifyRequest;
 import com.nexpath.dtos.request.PurchaseRequest;
 import com.nexpath.dtos.response.ApiResponse;
 import com.nexpath.dtos.response.CreditPackageResponse;
+import com.nexpath.dtos.response.CreditTransactionResponse;
 import com.nexpath.enums.CreditPackage;
 import com.nexpath.exceptions.BadRequestException;
 import com.nexpath.models.CreditTransaction;
@@ -54,7 +55,7 @@ public class CreditController {
             @RequestParam(defaultValue = "10") int size) {
 
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<CreditTransaction> txPage = creditService.getHistory(userId, pageable);
+        Page<CreditTransactionResponse> txPage = creditService.getHistory(userId, pageable);
 
         Map<String, Object> result = Map.of(
                 "content", txPage.getContent(),

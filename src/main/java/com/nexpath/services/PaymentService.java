@@ -55,11 +55,16 @@ public class PaymentService {
             String trimmedId = razorpayKeyId != null ? razorpayKeyId.trim() : "";
             String trimmedSecret = razorpayKeySecret != null ? razorpayKeySecret.trim() : "";
 
+            // [SMART-FIX] Common typo correction: if Key ID is "zp_test_...", it should be "rzp_test_..."
+            if (trimmedId.startsWith("zp_test_")) {
+                log.warn("⚠️ [V2-SMART-FIX] Detected potential typo in Razorpay Key ID ('zp_' prefix). Correcting to 'rzp_'.");
+                trimmedId = "r" + trimmedId;
+            }
+
             // Masked logging for debugging key injection (safe)
-            String maskedId = trimmedId.length() > 6 ? trimmedId.substring(0, 6) + "..." : "invalid";
-            String maskedSecret = trimmedSecret.length() > 4 ? trimmedSecret.substring(0, 4) + "..." : "invalid";
-            log.info("Razorpay Config Check -> KeyID: {} (len: {}), SecretPrefix: {} (len: {})", 
-                    maskedId, trimmedId.length(), maskedSecret, trimmedSecret.length());
+            String maskedId = trimmedId.length() > 8 ? trimmedId.substring(0, 8) + "..." : "invalid";
+            log.info("Razorpay Config Check -> KeyID: {} (len: {}), Secret: [MASKED]", 
+                    maskedId, trimmedId.length());
 
             RazorpayClient client = new RazorpayClient(trimmedId, trimmedSecret);
 
@@ -88,7 +93,7 @@ public class PaymentService {
                     orderId,
                     pkg.getAmountPaise(),
                     "INR",
-                    razorpayKeyId,
+                    trimmedId, // Send corrected ID to frontend
                     pkg.getCredits(),
                     pkg.getDisplayName()
             );
@@ -126,16 +131,22 @@ public class PaymentService {
         payment.setStatus(PaymentStatus.SUCCESS);
         paymentRepository.save(payment);
 
-        creditService.addCredits(
-                user,
-                payment.getCreditsToAdd(),
-                CreditTransactionType.PURCHASE,
-                "Credits purchased — " + payment.getCreditsToAdd() + " credits",
-                razorpayPaymentId
-        );
-
-        log.info("Payment verified for user {} — {} credits added",
-                user.getEmail(), payment.getCreditsToAdd());
+        if (payment.getAmountPaise() == 2000 && payment.getCreditsToAdd() == 3) {
+            // Native Connection Refill
+            creditService.addFreeConnections(user, 3, razorpayPaymentId);
+            log.info("Payment verified for user {} — 3 Free Connections Refill applied", user.getEmail());
+        } else {
+            // General Credit Addition
+            creditService.addCredits(
+                    user,
+                    payment.getCreditsToAdd(),
+                    CreditTransactionType.PURCHASE,
+                    "Credits purchased — " + payment.getCreditsToAdd() + " credits",
+                    razorpayPaymentId
+            );
+            log.info("Payment verified for user {} — {} credits added",
+                    user.getEmail(), payment.getCreditsToAdd());
+        }
     }
 
     // ─────────────────────────────────────────

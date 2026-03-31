@@ -1,6 +1,7 @@
 package com.nexpath.services;
 
 import com.nexpath.dtos.response.CreditBalanceResponse;
+import com.nexpath.dtos.response.CreditTransactionResponse;
 import com.nexpath.enums.CreditTransactionType;
 import com.nexpath.exceptions.BadRequestException;
 import com.nexpath.exceptions.InsufficientCreditsException;
@@ -48,6 +49,9 @@ public class CreditService {
                 .lastRefillDate(LocalDate.now())
                 .totalEarned(20)
                 .totalSpent(0)
+                .lockedCredits(0)
+                .freeConnectionsThisWeek(3)
+                .lastWeeklyReset(LocalDate.now())
                 .build();
 
         credits = userCreditsRepository.save(credits);
@@ -99,8 +103,11 @@ public class CreditService {
                            String description, String referenceId) {
         UserCredits credits = getOrCreateCredits(user);
 
-        credits.setTotalCredits(credits.getTotalCredits() + amount);
-        credits.setTotalEarned(credits.getTotalEarned() + amount);
+        int currentBalance = (credits.getTotalCredits() != null) ? credits.getTotalCredits() : 0;
+        int currentEarned = (credits.getTotalEarned() != null) ? credits.getTotalEarned() : 0;
+        
+        credits.setTotalCredits(currentBalance + amount);
+        credits.setTotalEarned(currentEarned + amount);
         userCreditsRepository.save(credits);
 
         CreditTransaction tx = CreditTransaction.builder()
@@ -116,24 +123,77 @@ public class CreditService {
     }
 
     // ─────────────────────────────────────────
+    // Add free connections
+    // ─────────────────────────────────────────
+    public void addFreeConnections(User user, int count, String transactionRef) {
+        UserCredits credits = getOrCreateCredits(user);
+        int current = (credits.getFreeConnectionsThisWeek() != null) ? credits.getFreeConnectionsThisWeek() : 0;
+        credits.setFreeConnectionsThisWeek(current + count);
+        userCreditsRepository.save(credits);
+
+        CreditTransaction tx = CreditTransaction.builder()
+                .user(user)
+                .type(CreditTransactionType.PURCHASE)
+                .amount(0) // 0 standard credits
+                .description("In-App Purchase: +3 Connections Refill")
+                .referenceId(transactionRef)
+                .balanceAfter(credits.getTotalCredits())
+                .build();
+
+        creditTransactionRepository.save(tx);
+    }
+
+    // ─────────────────────────────────────────
     // Get current balance
     // ─────────────────────────────────────────
     public CreditBalanceResponse getBalance(User user) {
         UserCredits credits = getOrCreateCredits(user);
 
         return new CreditBalanceResponse(
-                credits.getTotalCredits(),
-                credits.getFreeTodayRemaining(),
-                credits.getTotalEarned(),
-                credits.getTotalSpent()
+                (credits.getTotalCredits() != null) ? credits.getTotalCredits() : 0,
+                (credits.getLockedCredits() != null) ? credits.getLockedCredits() : 0,
+                (credits.getFreeTodayRemaining() != null) ? credits.getFreeTodayRemaining() : 0,
+                (credits.getTotalEarned() != null) ? credits.getTotalEarned() : 0,
+                (credits.getTotalSpent() != null) ? credits.getTotalSpent() : 0,
+                (credits.getFreeConnectionsThisWeek() != null) ? credits.getFreeConnectionsThisWeek() : 0
         );
+    }
+
+    // ─────────────────────────────────────────
+    // Log transaction without changing totalCredits (for locking/deduction logs)
+    // ─────────────────────────────────────────
+    public void logTransaction(User user, CreditTransactionType type, int amount,
+                               String description, String referenceId) {
+        UserCredits uc = getOrCreateCredits(user);
+        CreditTransaction tx = CreditTransaction.builder()
+                .user(user)
+                .type(type)
+                .amount(amount)
+                .description(description)
+                .referenceId(referenceId)
+                .balanceAfter(uc.getTotalCredits())
+                .build();
+        creditTransactionRepository.save(tx);
     }
 
     // ─────────────────────────────────────────
     // Paginated transaction history
     // ─────────────────────────────────────────
-    public Page<CreditTransaction> getHistory(Long userId, Pageable pageable) {
-        return creditTransactionRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
+    public Page<CreditTransactionResponse> getHistory(Long userId, Pageable pageable) {
+        return creditTransactionRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
+                .map(this::mapToResponse);
+    }
+
+    private CreditTransactionResponse mapToResponse(CreditTransaction tx) {
+        return CreditTransactionResponse.builder()
+                .id(tx.getId())
+                .type(tx.getType() != null ? tx.getType().name() : null)
+                .amount(tx.getAmount())
+                .description(tx.getDescription())
+                .referenceId(tx.getReferenceId())
+                .balanceAfter(tx.getBalanceAfter())
+                .createdAt(tx.getCreatedAt())
+                .build();
     }
 
     // ─────────────────────────────────────────

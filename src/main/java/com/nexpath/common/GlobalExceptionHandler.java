@@ -1,10 +1,7 @@
 package com.nexpath.common;
 
 import com.nexpath.dtos.response.ApiResponse;
-import com.nexpath.exceptions.BadRequestException;
-import com.nexpath.exceptions.InsufficientCreditsException;
-import com.nexpath.exceptions.PaymentException;
-import com.nexpath.exceptions.UnauthorizedException;
+import com.nexpath.exceptions.*;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -44,6 +41,12 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    // 🔹 DUPLICATE REQUEST
+    @ExceptionHandler(DuplicateRequestException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicate(DuplicateRequestException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(ex.getMessage()));
     }
 
     // 🔹 UNAUTHORIZED

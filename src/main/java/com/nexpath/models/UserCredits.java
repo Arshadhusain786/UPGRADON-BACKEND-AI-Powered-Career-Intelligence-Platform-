@@ -25,20 +25,37 @@ public class UserCredits {
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
+    @Builder.Default
     @Column(name = "total_credits", nullable = false)
-    private int totalCredits = 50;
+    private Integer totalCredits = 50;
 
+    @Builder.Default
     @Column(name = "free_today_remaining", nullable = false)
-    private int freeTodayRemaining = 10;
+    private Integer freeTodayRemaining = 10;
 
-    @Column(name = "last_refill_date", nullable = false)
-    private LocalDate lastRefillDate;
+    @Builder.Default
+    @Column(name = "last_refill_date")
+    private LocalDate lastRefillDate = LocalDate.now();
 
+    @Builder.Default
     @Column(name = "total_earned", nullable = false)
-    private int totalEarned = 50;
+    private Integer totalEarned = 50;
 
+    @Builder.Default
     @Column(name = "total_spent", nullable = false)
-    private int totalSpent = 0;
+    private Integer totalSpent = 0;
+
+    @Builder.Default
+    @Column(name = "locked_credits")
+    private Integer lockedCredits = 0;
+
+    @Builder.Default
+    @Column(name = "free_connections_this_week")
+    private Integer freeConnectionsThisWeek = 3;
+
+    @Builder.Default
+    @Column(name = "last_weekly_reset")
+    private LocalDate lastWeeklyReset = LocalDate.now();
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

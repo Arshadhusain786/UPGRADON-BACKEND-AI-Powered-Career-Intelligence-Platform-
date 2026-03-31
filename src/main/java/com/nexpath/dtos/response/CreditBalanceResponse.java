@@ -8,7 +8,9 @@ import lombok.Data;
 public class CreditBalanceResponse {
 
     private int totalCredits;
+    private int lockedCredits;
     private int freeTodayRemaining;
     private int totalEarned;
     private int totalSpent;
+    private int freeConnectionsThisWeek;
 }
