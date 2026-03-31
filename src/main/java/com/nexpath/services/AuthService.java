@@ -35,7 +35,8 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
-    private final UserMapper userMapper;
+    private final CreditService creditService;
+    private final ReferralService referralService;
 
     // 🔹 REGISTER
     @Transactional
@@ -65,16 +66,28 @@ public class AuthService {
                 .role(role)
                 .active(true)
                 .emailVerified(false)
+                .referredByCode(request.getReferralCode()) // Track source
                 .build();
 
         user = userRepository.save(user);
 
-        log.info("User registered: {} with role {}", user.getEmail(), user.getRole());
+        // 💎 Step 1: ALWAYS award Signup Bonus (20 credits)
+        creditService.initializeCredits(user);
+
+        // 🤝 Step 2: Handle Referral (70 for new user, 20 for referrer)
+        if (request.getReferralCode() != null && !request.getReferralCode().isBlank()) {
+            referralService.processReferral(user, request.getReferralCode());
+        }
+
+        // 🔑 Step 3: Generate this user's unique sharing code
+        referralService.generateReferralCode(user);
+
+        log.info("User registered & credits initialized: {}", user.getEmail());
 
         String accessToken = jwtService.generateAccessToken(user);
         String refreshToken = createRefreshToken(user);
 
-        return new AuthResponse(accessToken, refreshToken, userMapper.toDto(user));
+        return new AuthResponse(accessToken, refreshToken, UserMapper.toDto(user));
     }
 
     // 🔹 LOGIN
@@ -97,9 +110,9 @@ public class AuthService {
         return new AuthResponse(
                 accessToken,
                 refreshToken,
-                userMapper.toDto(user)
-        );
+                UserMapper.toDto(user));
     }
+
     // 🔹 REFRESH TOKEN
     @Transactional
     public TokenResponse refreshToken(String refreshTokenStr) {
@@ -137,7 +150,49 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadRequestException("User not found"));
 
-        return userMapper.toDto(user);
+        return UserMapper.toDto(user);
+    }
+
+    // 🔹 UPDATE PROFILE
+    @Transactional
+    public UserDto updateProfile(Long userId, @Valid com.nexpath.dtos.request.UpdateProfileRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BadRequestException("User not found"));
+
+        // Check if email is already taken by another user
+        if (!user.getEmail().equals(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
+            throw new BadRequestException("Email already in use");
+        }
+
+        user.setName(request.getName());
+        user.setEmail(request.getEmail());
+
+        if (request.getTheme() != null) {
+            user.setTheme(request.getTheme());
+        }
+
+        user = userRepository.save(user);
+        log.info("Profile updated for user: {}", user.getEmail());
+
+        return UserMapper.toDto(user);
+    }
+
+    // 🔐 CHANGE PASSWORD
+    @Transactional
+    public void changePassword(Long userId, com.nexpath.dtos.request.ChangePasswordRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BadRequestException("User not found"));
+
+        // Verify current password
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+            throw new BadRequestException("Current password is incorrect");
+        }
+
+        // Update password
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        log.info("Password updated for user: {}", user.getEmail());
     }
 
     // 🔐 CREATE REFRESH TOKEN

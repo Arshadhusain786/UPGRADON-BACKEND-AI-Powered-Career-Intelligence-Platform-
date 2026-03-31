@@ -58,8 +58,17 @@ public class User {
     @Column(name = "active", nullable = false)
     private boolean active = true;
 
+    @Column(name = "referral_code", unique = true, length = 10)
+    private String referralCode;
+
+    @Column(name = "referred_by_code", length = 10)
+    private String referredByCode;
+
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
+
+    @Column(name = "theme", length = 10, nullable = true, columnDefinition = "varchar(10) default 'light'")
+    private String theme = "light";
 
     @Column(name = "deleted", nullable = false)
     private boolean deleted = false;

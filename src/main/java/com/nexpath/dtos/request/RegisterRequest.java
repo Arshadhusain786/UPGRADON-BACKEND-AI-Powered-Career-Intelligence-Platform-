@@ -22,4 +22,6 @@ public class RegisterRequest {
 
     // Optional (default STUDENT if null)
     private String role;
+
+    private String referralCode;
 }

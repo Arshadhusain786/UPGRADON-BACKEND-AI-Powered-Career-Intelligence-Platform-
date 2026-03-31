@@ -2,6 +2,8 @@ package com.nexpath.common;
 
 import com.nexpath.dtos.response.ApiResponse;
 import com.nexpath.exceptions.BadRequestException;
+import com.nexpath.exceptions.InsufficientCreditsException;
+import com.nexpath.exceptions.PaymentException;
 import com.nexpath.exceptions.UnauthorizedException;
 
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +51,22 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException ex) {
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    // 🔹 INSUFFICIENT CREDITS (402 Payment Required)
+    @ExceptionHandler(InsufficientCreditsException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInsufficientCredits(InsufficientCreditsException ex) {
+
+        return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    // 🔹 PAYMENT EXCEPTION
+    @ExceptionHandler(PaymentException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePaymentException(PaymentException ex) {
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 

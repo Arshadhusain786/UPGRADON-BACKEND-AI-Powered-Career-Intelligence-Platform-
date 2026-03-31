@@ -87,6 +87,34 @@ public class AuthController {
         );
     }
 
+    // 🔹 UPDATE PROFILE (AUTHENTICATED)
+    @PutMapping("/profile")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<UserDto>> updateProfile(
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody com.nexpath.dtos.request.UpdateProfileRequest request
+    ) {
+        UserDto user = authService.updateProfile(userId, request);
+
+        return ResponseEntity.ok(
+                ApiResponse.success("Profile updated successfully", user)
+        );
+    }
+
+    // 🔹 CHANGE PASSWORD (AUTHENTICATED)
+    @PutMapping("/password")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody com.nexpath.dtos.request.ChangePasswordRequest request
+    ) {
+        authService.changePassword(userId, request);
+
+        return ResponseEntity.ok(
+                ApiResponse.success("Password updated successfully", null)
+        );
+    }
+
     // 🔥 ADMIN ONLY TEST ENDPOINT
     @GetMapping("/admin-test")
     @PreAuthorize("hasRole('ADMIN')")
