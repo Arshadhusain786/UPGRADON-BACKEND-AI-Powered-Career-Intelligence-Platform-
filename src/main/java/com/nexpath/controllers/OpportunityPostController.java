@@ -6,6 +6,7 @@ import com.nexpath.dtos.response.OpportunityPostResponse;
 import com.nexpath.services.OpportunityPostService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/opportunities")
 @RequiredArgsConstructor
+@Slf4j
 public class OpportunityPostController {
 
     private final OpportunityPostService postService;
@@ -23,6 +25,7 @@ public class OpportunityPostController {
     public ApiResponse<OpportunityPostResponse> createPost(
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody CreatePostRequest req) {
+        log.info("Received request to create opportunity: {} from user: {}", req.getTitle(), userId);
         return ApiResponse.success("Opportunity posted", postService.createPost(userId, req));
     }
 

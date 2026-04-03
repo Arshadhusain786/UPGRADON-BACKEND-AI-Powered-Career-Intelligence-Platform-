@@ -29,6 +29,7 @@ public class GlobalExceptionHandler {
             String field = ((FieldError) error).getField();
             String message = error.getDefaultMessage();
             errors.put(field, message);
+            log.error("❌ Validation Error on field '{}': {}", field, message);
         });
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -89,5 +90,29 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("Internal server error"));
+    }
+
+    // 🔹 FILE TOO LARGE (413)
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(
+            org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ApiResponse.error("File too large. Maximum allowed size is 10MB."));
+    }
+
+    // 🔹 ACCESS DENIED (403)
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(
+            org.springframework.security.access.AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("Access denied. You do not have permission to perform this action."));
+    }
+
+    // 🔹 MISSING REQUEST PARAM
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingParam(
+            org.springframework.web.bind.MissingServletRequestParameterException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("Missing required parameter: " + ex.getParameterName()));
     }
 }

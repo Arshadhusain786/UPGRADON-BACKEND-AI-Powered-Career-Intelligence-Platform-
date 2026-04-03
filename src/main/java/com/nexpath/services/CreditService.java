@@ -13,6 +13,8 @@ import com.nexpath.repository.UserCreditsRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -33,7 +35,9 @@ public class CreditService {
     // ─────────────────────────────────────────
     // Get or Create credits (solves old user missing credits issue)
     // ─────────────────────────────────────────
-    private UserCredits getOrCreateCredits(User user) {
+    // Get a user's credit data
+    @Cacheable(value = "user_credits", key = "#user.id")
+    public UserCredits getOrCreateCredits(User user) {
         return userCreditsRepository.findByUser(user)
                 .orElseGet(() -> initializeCredits(user));
     }
@@ -74,6 +78,8 @@ public class CreditService {
     // ─────────────────────────────────────────
     // Deduct credits before an AI call
     // ─────────────────────────────────────────
+    // Deduct credits for an action (e.g., viewing standard contact, AI generation)
+    @CacheEvict(value = "user_credits", key = "#user.id")
     public void deductCredits(User user, int amount, CreditTransactionType type, String description) {
         UserCredits credits = getOrCreateCredits(user);
 
@@ -99,6 +105,8 @@ public class CreditService {
     // ─────────────────────────────────────────
     // Add credits (purchase / referral / daily)
     // ─────────────────────────────────────────
+    // Log a credit transaction (internal)
+    @CacheEvict(value = "user_credits", key = "#user.id")
     public void addCredits(User user, int amount, CreditTransactionType type,
                            String description, String referenceId) {
         UserCredits credits = getOrCreateCredits(user);
@@ -203,29 +211,35 @@ public class CreditService {
     public void refillDailyCredits() {
         LocalDate today = LocalDate.now();
 
-        List<UserCredits> staleAccounts = userCreditsRepository.findAll()
-                .stream()
-                .filter(uc -> uc.getLastRefillDate() == null || uc.getLastRefillDate().isBefore(today))
-                .toList();
+        int pageSize = 500;
+        int pageNumber = 0;
+        org.springframework.data.domain.Page<UserCredits> pageResult;
+        int totalProcessed = 0;
 
-        for (UserCredits uc : staleAccounts) {
-            uc.setFreeTodayRemaining(10);
-            uc.setLastRefillDate(today);
-            uc.setTotalCredits(uc.getTotalCredits() + 10);
-            uc.setTotalEarned(uc.getTotalEarned() + 10);
-            userCreditsRepository.save(uc);
+        do {
+            pageResult = userCreditsRepository.findByLastRefillDateBeforeOrLastRefillDateIsNull(today, org.springframework.data.domain.PageRequest.of(pageNumber, pageSize));
+            
+            for (UserCredits uc : pageResult.getContent()) {
+                uc.setFreeTodayRemaining(10);
+                uc.setLastRefillDate(today);
+                uc.setTotalCredits(uc.getTotalCredits() + 10);
+                uc.setTotalEarned(uc.getTotalEarned() + 10);
+                userCreditsRepository.save(uc);
 
-            CreditTransaction tx = CreditTransaction.builder()
-                    .user(uc.getUser())
-                    .type(CreditTransactionType.EARNED_DAILY)
-                    .amount(10)
-                    .description("Daily free credits")
-                    .balanceAfter(uc.getTotalCredits())
-                    .build();
+                CreditTransaction tx = CreditTransaction.builder()
+                        .user(uc.getUser())
+                        .type(CreditTransactionType.EARNED_DAILY)
+                        .amount(10)
+                        .description("Daily free credits")
+                        .balanceAfter(uc.getTotalCredits())
+                        .build();
 
-            creditTransactionRepository.save(tx);
-        }
+                creditTransactionRepository.save(tx);
+                totalProcessed++;
+            }
+            pageNumber++;
+        } while (pageResult.hasNext());
 
-        log.info("Daily credit refill completed for {} users", staleAccounts.size());
+        log.info("Daily credit refill completed for {} users", totalProcessed);
     }
 }

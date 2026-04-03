@@ -13,5 +13,6 @@ public enum CreditTransactionType {
     CONNECTION_DEDUCTED,
     CONNECTION_REFUNDED,
     HIRE_REWARD,
-    BOOST_POST
+    BOOST_POST,
+    REFUND
 }

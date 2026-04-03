@@ -16,14 +16,15 @@ import java.util.List;
 @Repository
 public interface OpportunityPostRepository extends JpaRepository<OpportunityPost, Long> {
     
-    Page<OpportunityPost> findByStatusOrderByIsBoostedDescCreatedAtDesc(PostStatus status, Pageable p);
+    Page<OpportunityPost> findByStatusInOrderByIsBoostedDescCreatedAtDesc(
+            List<PostStatus> statuses, Pageable p);
     
+    Page<OpportunityPost> findByStatusInAndRoleTypeOrderByIsBoostedDescCreatedAtDesc(
+            List<PostStatus> statuses, OpportunityType roleType, Pageable p);
+
     Page<OpportunityPost> findByPosterIdOrderByCreatedAtDesc(Long posterId, Pageable p);
     
-    Page<OpportunityPost> findByStatusAndRoleTypeOrderByIsBoostedDescCreatedAtDesc(
-            PostStatus status, OpportunityType roleType, Pageable p);
-    
-    @Query("SELECT p FROM OpportunityPost p WHERE p.status = 'ACTIVE' AND " +
+    @Query("SELECT p FROM OpportunityPost p WHERE (p.status = 'ACTIVE' OR p.status = 'BOOSTED') AND " +
            "(LOWER(p.title) LIKE LOWER(CONCAT('%',:q,'%')) OR " +
            "LOWER(p.company) LIKE LOWER(CONCAT('%',:q,'%')) OR " +
            "LOWER(p.skillsRequired) LIKE LOWER(CONCAT('%',:q,'%')))")

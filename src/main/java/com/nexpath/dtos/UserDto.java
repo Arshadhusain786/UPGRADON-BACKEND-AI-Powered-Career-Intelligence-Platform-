@@ -13,6 +13,8 @@ public class UserDto {
     private String role;
     private String profilePicture;
     private String bio;
+    private String targetRole;
+    private String skills;
     private String theme;
     private boolean emailVerified;
     private String createdAt;

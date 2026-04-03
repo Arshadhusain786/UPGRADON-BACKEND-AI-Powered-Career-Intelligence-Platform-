@@ -46,6 +46,12 @@ public class User {
     @Column(length = 1000)
     private String bio;
 
+    @Column(name = "target_role")
+    private String targetRole;
+
+    @Column(name = "skills", columnDefinition = "TEXT")
+    private String skills;
+
     @Column(name = "email_verified", nullable = false)
     private boolean emailVerified = false;
 

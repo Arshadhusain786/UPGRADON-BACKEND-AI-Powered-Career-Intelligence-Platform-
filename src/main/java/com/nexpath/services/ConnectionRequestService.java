@@ -42,6 +42,7 @@ public class ConnectionRequestService {
     private final UserRepository userRepo;
     private final UserCreditsRepository userCreditsRepo;
     private final CreditService creditService;
+    private final AiService aiService;
 
     public ConnectionRequestResponse sendRequest(Long seekerId, SendConnectionRequest req) {
         User seeker = userRepo.findById(seekerId)
@@ -98,6 +99,20 @@ public class ConnectionRequestService {
         postRepo.save(post);
 
         return mapToResponse(saved);
+    }
+
+    public String generateConnectionSummary(String resumeText, String postTitle, String seekerName) {
+        if (resumeText == null || resumeText.isBlank()) return null;
+        try {
+            return aiService.chat(
+                    "You are a professional career assistant. Write a concise, compelling 3-sentence " +
+                            "connection request message for a job seeker. Be professional and specific.",
+                    "Seeker: " + seekerName + "\nPost: " + postTitle + "\nResume snippet: " +
+                            resumeText.substring(0, Math.min(1000, resumeText.length()))
+            );
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public ConnectionRequestResponse respondToRequest(Long posterId, Long connectionId,
@@ -269,14 +284,22 @@ public class ConnectionRequestService {
     @Scheduled(cron = "0 0 0 * * MON")
     public void resetWeeklyFreeConnections() {
         LocalDate today = LocalDate.now();
-        List<UserCredits> allCredits = userCreditsRepo.findAll();
+        int pageSize = 500;
+        int pageNumber = 0;
+        Page<UserCredits> pageResult;
         int count = 0;
-        for (UserCredits uc : allCredits) {
-            uc.setFreeConnectionsThisWeek(3);
-            uc.setLastWeeklyReset(today);
-            userCreditsRepo.save(uc);
-            count++;
-        }
+
+        do {
+            pageResult = userCreditsRepo.findAll(PageRequest.of(pageNumber, pageSize));
+            for (UserCredits uc : pageResult.getContent()) {
+                uc.setFreeConnectionsThisWeek(3);
+                uc.setLastWeeklyReset(today);
+                userCreditsRepo.save(uc);
+                count++;
+            }
+            pageNumber++;
+        } while (pageResult.hasNext());
+        
         log.info("Reset weekly free connections for {} users", count);
     }
 }

@@ -17,6 +17,8 @@ public class UserMapper {
                 user.getRole() != null ? user.getRole().name() : null,
                 user.getProfilePicture(),
                 user.getBio(),
+                user.getTargetRole(),
+                user.getSkills(),
                 user.getTheme(),
                 user.isEmailVerified(),
                 user.getCreatedAt() != null ? user.getCreatedAt().toString() : null

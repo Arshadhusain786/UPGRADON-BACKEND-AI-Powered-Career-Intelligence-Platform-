@@ -7,4 +7,6 @@ import lombok.Data;
 public class ResumeScoreRequest {
     @NotBlank
     private String resumeText;
+    
+    private String targetRole;
 }

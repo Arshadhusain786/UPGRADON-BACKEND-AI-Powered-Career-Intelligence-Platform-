@@ -109,11 +109,19 @@ public class PaymentService {
     // ─────────────────────────────────────────
     // Verify Razorpay payment signature and credit user
     // ─────────────────────────────────────────
+    @Transactional
     public void verifyPayment(User user, String razorpayOrderId,
                               String razorpayPaymentId, String razorpaySignature) {
 
         Payment payment = paymentRepository.findByRazorpayOrderId(razorpayOrderId)
                 .orElseThrow(() -> new PaymentException("Payment order not found"));
+
+        // ✅ IDEMPOTENCY CHECK: Avoid double processing
+        if (payment.getStatus() == PaymentStatus.SUCCESS) {
+            log.warn("🚨 [IDEMPOTENCY] Payment {} already processed for user {}. Skipping credit addition.", 
+                    razorpayOrderId, user.getEmail());
+            return;
+        }
 
         // Verify HMAC-SHA256 signature
         String payload = razorpayOrderId + "|" + razorpayPaymentId;
@@ -123,29 +131,38 @@ public class PaymentService {
         if (!generatedSignature.equals(razorpaySignature)) {
             payment.setStatus(PaymentStatus.FAILED);
             paymentRepository.save(payment);
+            log.error("❌ Invalid payment signature for order: {}", razorpayOrderId);
             throw new PaymentException("Invalid payment signature. Possible fraud attempt.");
         }
 
+        // ✅ Update payment status FIRST
         payment.setRazorpayPaymentId(razorpayPaymentId);
         payment.setRazorpaySignature(razorpaySignature);
         payment.setStatus(PaymentStatus.SUCCESS);
-        paymentRepository.save(payment);
+        paymentRepository.saveAndFlush(payment); // Force commit check
 
-        if (payment.getAmountPaise() == 2000 && payment.getCreditsToAdd() == 3) {
-            // Native Connection Refill
-            creditService.addFreeConnections(user, 3, razorpayPaymentId);
-            log.info("Payment verified for user {} — 3 Free Connections Refill applied", user.getEmail());
-        } else {
-            // General Credit Addition
-            creditService.addCredits(
-                    user,
-                    payment.getCreditsToAdd(),
-                    CreditTransactionType.PURCHASE,
-                    "Credits purchased — " + payment.getCreditsToAdd() + " credits",
-                    razorpayPaymentId
-            );
-            log.info("Payment verified for user {} — {} credits added",
-                    user.getEmail(), payment.getCreditsToAdd());
+        // ✅ Add credits/connections
+        try {
+            if (payment.getAmountPaise() == 2000 && payment.getCreditsToAdd() == 3) {
+                // Native Connection Refill
+                creditService.addFreeConnections(user, 3, razorpayPaymentId);
+                log.info("✅ Connection refill applied: user={}, order={}", user.getEmail(), razorpayOrderId);
+            } else {
+                // General Credit Addition
+                creditService.addCredits(
+                        user,
+                        payment.getCreditsToAdd(),
+                        CreditTransactionType.PURCHASE,
+                        "Credits purchased — " + payment.getCreditsToAdd() + " credits",
+                        razorpayPaymentId
+                );
+                log.info("✅ Credits added: user={}, amount={}, order={}", 
+                        user.getEmail(), payment.getCreditsToAdd(), razorpayOrderId);
+            }
+        } catch (Exception e) {
+            log.error("🔥 CRITICAL: Payment SUCCESS but credit addition FAILED for user {}. Order: {}. Error: {}", 
+                    user.getEmail(), razorpayOrderId, e.getMessage());
+            throw new PaymentException("Payment verified but failed to update credits. Please contact support with Order ID: " + razorpayOrderId);
         }
     }
 

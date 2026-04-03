@@ -1,12 +1,7 @@
 package com.nexpath.controllers;
 
-import com.nexpath.dtos.request.ResumeScoreRequest;
-import com.nexpath.dtos.request.RoadmapRequest;
-import com.nexpath.dtos.request.SkillGapRequest;
-import com.nexpath.dtos.response.ApiResponse;
-import com.nexpath.dtos.response.ResumeScoreResponse;
-import com.nexpath.dtos.response.RoadmapResponse;
-import com.nexpath.dtos.response.SkillGapResponse;
+import com.nexpath.dtos.request.*;
+import com.nexpath.dtos.response.*;
 import com.nexpath.enums.CreditTransactionType;
 import com.nexpath.exceptions.BadRequestException;
 import com.nexpath.models.User;
@@ -15,13 +10,24 @@ import com.nexpath.services.AiService;
 import com.nexpath.services.CreditService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+import java.io.IOException;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/ai")
 @RequiredArgsConstructor
+@Slf4j
 public class AiController {
 
     private final AiService aiService;
@@ -38,16 +44,23 @@ public class AiController {
             @Valid @RequestBody RoadmapRequest request) {
 
         User user = loadUser(userId);
-        
-        // 💎 Deduct Credits (5)
-        creditService.deductCredits(user, 5, CreditTransactionType.SPENT_ROADMAP, "AI Roadmap Generation");
+        final int COST = 5;
 
-        RoadmapResponse roadmap = aiService.generateRoadmap(request);
+        // Deduct upfront
+        creditService.deductCredits(user, COST, CreditTransactionType.SPENT_ROADMAP,
+                "AI Roadmap Generation");
 
-        return ApiResponse.success(
-                "Roadmap generated successfully",
-                roadmap
-        );
+        try {
+            RoadmapResponse roadmap = aiService.generateRoadmap(request);
+            return ApiResponse.success("Roadmap generated successfully", roadmap);
+        } catch (Exception e) {
+            // Refund on any failure
+            log.error("Roadmap AI call failed for user {}: {}", userId, e.getMessage());
+            creditService.addCredits(user, COST, CreditTransactionType.REFUND,
+                    "Refund — AI Roadmap failed", null);
+            throw new BadRequestException("AI service is temporarily unavailable. " +
+                    COST + " credits have been refunded to your account.");
+        }
     }
 
     // =========================
@@ -60,16 +73,21 @@ public class AiController {
             @Valid @RequestBody SkillGapRequest request) {
 
         User user = loadUser(userId);
-        
-        // 💎 Deduct Credits (3)
-        creditService.deductCredits(user, 3, CreditTransactionType.SPENT_SKILLGAP, "Skill Gap Analysis");
+        final int COST = 3;
 
-        SkillGapResponse response = aiService.analyzeSkillGap(request);
+        creditService.deductCredits(user, COST, CreditTransactionType.SPENT_SKILLGAP,
+                "Skill Gap Analysis");
 
-        return ApiResponse.success(
-                "Skill gap analyzed successfully",
-                response
-        );
+        try {
+            SkillGapResponse response = aiService.analyzeSkillGap(request);
+            return ApiResponse.success("Skill gap analyzed successfully", response);
+        } catch (Exception e) {
+            log.error("SkillGap AI call failed for user {}: {}", userId, e.getMessage());
+            creditService.addCredits(user, COST, CreditTransactionType.REFUND,
+                    "Refund — Skill Gap Analysis failed", null);
+            throw new BadRequestException("AI service is temporarily unavailable. " +
+                    COST + " credits have been refunded to your account.");
+        }
     }
 
     // =========================
@@ -82,20 +100,72 @@ public class AiController {
             @Valid @RequestBody ResumeScoreRequest request) {
 
         User user = loadUser(userId);
+        final int COST = 4;
+
+        creditService.deductCredits(user, COST, CreditTransactionType.SPENT_RESUME,
+                "Resume Score Analysis");
+
+        try {
+            ResumeScoreResponse response = aiService.scoreResume(request);
+            return ApiResponse.success("Resume scored successfully", response);
+        } catch (Exception e) {
+            log.error("ResumeScore AI call failed for user {}: {}", userId, e.getMessage());
+            creditService.addCredits(user, COST, CreditTransactionType.REFUND,
+                    "Refund — Resume Score failed", null);
+            throw new BadRequestException("AI service is temporarily unavailable. " +
+                    COST + " credits have been refunded to your account.");
+        }
+    }
+
+    // =========================
+    // 📄 RESUME UPLOAD
+    // =========================
+    @PostMapping(value = "/resume-upload", consumes = "multipart/form-data")
+    @PreAuthorize("hasAnyRole('STUDENT','MENTOR','ADMIN')")
+    public ApiResponse<Map<String, Object>> resumeUpload(
+            @AuthenticationPrincipal Long userId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "targetRole", required = false) String targetRole) {
+
+        if (file.isEmpty()) throw new BadRequestException("File is empty");
         
-        // 💎 Deduct Credits (4)
-        creditService.deductCredits(user, 4, CreditTransactionType.SPENT_RESUME, "Resume Score Analysis");
+        User user = loadUser(userId);
+        final int COST = 4;
 
-        ResumeScoreResponse response = aiService.scoreResume(request);
+        creditService.deductCredits(user, COST, CreditTransactionType.SPENT_RESUME, "Resume Upload Analysis");
 
-        return ApiResponse.success(
-                "Resume scored successfully",
-                response
-        );
+        try {
+            String content;
+            String filename = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase() : "";
+            
+            if (filename.endsWith(".pdf")) {
+                try (PDDocument document = Loader.loadPDF(file.getBytes())) {
+                    PDFTextStripper stripper = new PDFTextStripper();
+                    content = stripper.getText(document);
+                }
+            } else {
+                // Default fallback for .txt or other raw text files
+                content = new String(file.getBytes(), StandardCharsets.UTF_8);
+            }
+
+            if (content == null || content.isBlank()) {
+                throw new BadRequestException("Could not extract any text from the uploaded file.");
+            }
+
+            Map<String, Object> result = aiService.parseAndAnalyzeResume(content, targetRole);
+            return ApiResponse.success("Resume analyzed successfully", result);
+
+        } catch (Exception e) {
+            log.error("Resume upload AI processing failed for user {}: {}", userId, e.getMessage());
+            creditService.addCredits(user, COST, CreditTransactionType.REFUND, 
+                    "Refund — Resume Upload Analysis failed", null);
+            throw new BadRequestException("Failed to process resume: " + e.getMessage() + 
+                    ". " + COST + " credits have been refunded.");
+        }
     }
 
     private User loadUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BadRequestException("User not found"));
     }
-}
+}

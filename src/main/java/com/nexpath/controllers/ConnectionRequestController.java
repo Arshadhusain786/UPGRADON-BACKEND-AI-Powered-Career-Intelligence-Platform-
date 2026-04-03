@@ -13,6 +13,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/connections")
 @RequiredArgsConstructor
@@ -26,6 +28,14 @@ public class ConnectionRequestController {
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody SendConnectionRequest req) {
         return ApiResponse.success("Connection request sent", connService.sendRequest(userId, req));
+    }
+
+    @PostMapping("/ai-summary")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<String> generateSummary(@RequestBody Map<String, String> body) {
+        String summary = connService.generateConnectionSummary(
+                body.get("resumeText"), body.get("postTitle"), body.get("seekerName"));
+        return ApiResponse.success("Summary generated", summary);
     }
 
     @PostMapping("/{id}/respond")

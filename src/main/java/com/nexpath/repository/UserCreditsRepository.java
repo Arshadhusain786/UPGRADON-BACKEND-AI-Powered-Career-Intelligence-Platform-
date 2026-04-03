@@ -11,4 +11,6 @@ public interface UserCreditsRepository extends JpaRepository<UserCredits, Long> 
     Optional<UserCredits> findByUserId(Long userId);
 
     Optional<UserCredits> findByUser(User user);
+
+    org.springframework.data.domain.Page<UserCredits> findByLastRefillDateBeforeOrLastRefillDateIsNull(java.time.LocalDate date, org.springframework.data.domain.Pageable pageable);
 }

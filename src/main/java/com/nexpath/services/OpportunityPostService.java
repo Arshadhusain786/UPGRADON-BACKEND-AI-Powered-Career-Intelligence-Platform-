@@ -35,25 +35,33 @@ public class OpportunityPostService {
     private final CreditService creditService;
 
     public OpportunityPostResponse createPost(Long userId, CreatePostRequest req) {
+        log.info("Attempting to create opportunity post for user {}: {}", userId, req.getTitle());
+        
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new BadRequestException("User not found"));
 
-        OpportunityPost post = OpportunityPost.builder()
-                .poster(user)
-                .title(req.getTitle())
-                .company(req.getCompany())
-                .description(req.getDescription())
-                .roleType(req.getRoleType() != null ? req.getRoleType() : OpportunityType.FULL_TIME)
-                .location(req.getLocation())
-                .skillsRequired(req.getSkillsRequired())
-                .experienceRequired(req.getExperienceRequired())
-                .maxConnections(req.getMaxConnections() != null ? req.getMaxConnections() : 50)
-                .expiresAt(req.getExpiresAt() != null ? req.getExpiresAt() : LocalDateTime.now().plusDays(30))
-                .status(PostStatus.ACTIVE)
-                .build();
+        try {
+            OpportunityPost post = OpportunityPost.builder()
+                    .poster(user)
+                    .title(req.getTitle())
+                    .company(req.getCompany())
+                    .description(req.getDescription())
+                    .roleType(req.getRoleType() != null ? req.getRoleType() : OpportunityType.FULL_TIME)
+                    .location(req.getLocation())
+                    .skillsRequired(req.getSkillsRequired())
+                    .experienceRequired(req.getExperienceRequired())
+                    .maxConnections(req.getMaxConnections() != null ? req.getMaxConnections() : 50)
+                    .expiresAt(req.getExpiresAt() != null ? req.getExpiresAt() : LocalDateTime.now().plusDays(30))
+                    .status(PostStatus.ACTIVE)
+                    .build();
 
-        OpportunityPost saved = postRepo.save(post);
-        return mapToResponse(saved, userId);
+            OpportunityPost saved = postRepo.save(post);
+            log.info("Successfully created opportunity post ID: {}", saved.getId());
+            return mapToResponse(saved, userId);
+        } catch (Exception e) {
+            log.error("Failed to create opportunity post for user {}. Error: {}", userId, e.getMessage(), e);
+            throw new BadRequestException("Database save failed: " + e.getMessage());
+        }
     }
 
     public Page<OpportunityPostResponse> getActivePosts(Long currentUserId, String search,
@@ -61,17 +69,19 @@ public class OpportunityPostService {
         Pageable pageable = PageRequest.of(page, size);
         Page<OpportunityPost> posts;
 
+        List<PostStatus> statuses = List.of(PostStatus.ACTIVE, PostStatus.BOOSTED);
+        
         if (search != null && !search.trim().isEmpty()) {
             posts = postRepo.searchPosts(search.trim(), pageable);
         } else if (roleType != null && !roleType.trim().isEmpty()) {
             try {
                 OpportunityType type = OpportunityType.valueOf(roleType.toUpperCase());
-                posts = postRepo.findByStatusAndRoleTypeOrderByIsBoostedDescCreatedAtDesc(PostStatus.ACTIVE, type, pageable);
+                posts = postRepo.findByStatusInAndRoleTypeOrderByIsBoostedDescCreatedAtDesc(statuses, type, pageable);
             } catch (IllegalArgumentException e) {
-                posts = postRepo.findByStatusOrderByIsBoostedDescCreatedAtDesc(PostStatus.ACTIVE, pageable);
+                posts = postRepo.findByStatusInOrderByIsBoostedDescCreatedAtDesc(statuses, pageable);
             }
         } else {
-            posts = postRepo.findByStatusOrderByIsBoostedDescCreatedAtDesc(PostStatus.ACTIVE, pageable);
+            posts = postRepo.findByStatusInOrderByIsBoostedDescCreatedAtDesc(statuses, pageable);
         }
 
         return posts.map(post -> mapToResponse(post, currentUserId));

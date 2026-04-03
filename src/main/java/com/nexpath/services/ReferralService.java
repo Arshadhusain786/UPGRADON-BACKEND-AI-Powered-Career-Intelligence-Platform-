@@ -10,6 +10,8 @@ import com.nexpath.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -41,6 +43,7 @@ public class ReferralService {
     // ─────────────────────────────────────────
     // Process a referral when a new user signs up
     // ─────────────────────────────────────────
+    @CacheEvict(value = "referral_stats", key = "#referrer.id", condition = "#referrer != null")
     public void processReferral(User newUser, String referralCode) {
         if (referralCode == null || referralCode.isBlank()) return;
 
@@ -75,16 +78,17 @@ public class ReferralService {
         });
     }
 
+    @org.springframework.beans.factory.annotation.Value("${app.base-url}")
+    private String baseUrl;
+
     // ─────────────────────────────────────────
     // Get Referral Stats for a user
     // ─────────────────────────────────────────
+    @Cacheable(value = "referral_stats", key = "#user.id")
     public ReferralStatsResponse getStats(User user) {
         String code = generateReferralCode(user);
         long count = referralRepository.countByReferrer(user);
         Integer totalEarned = referralRepository.sumRewardCreditsByReferrer(user);
-        
-        // Base dynamic URL (ideally from Config/Environment)
-        String baseUrl = "https://upgradon.com"; // Default to production
         
         List<ReferralDto> referrals = referralRepository.findByReferrerOrderByCreatedAtDesc(user)
                 .stream()

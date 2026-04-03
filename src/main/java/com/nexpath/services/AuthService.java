@@ -165,11 +165,11 @@ public class AuthService {
         }
 
         user.setName(request.getName());
-        user.setEmail(request.getEmail());
-
-        if (request.getTheme() != null) {
-            user.setTheme(request.getTheme());
-        }
+        if (request.getEmail() != null) user.setEmail(request.getEmail());
+        if (request.getBio() != null) user.setBio(request.getBio());
+        if (request.getTargetRole() != null) user.setTargetRole(request.getTargetRole());
+        if (request.getSkills() != null) user.setSkills(request.getSkills());
+        if (request.getTheme() != null) user.setTheme(request.getTheme());
 
         user = userRepository.save(user);
         log.info("Profile updated for user: {}", user.getEmail());

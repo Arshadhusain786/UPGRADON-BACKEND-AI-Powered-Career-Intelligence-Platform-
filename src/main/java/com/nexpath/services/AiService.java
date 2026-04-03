@@ -1,73 +1,41 @@
 package com.nexpath.services;
 
-import com.nexpath.ai.RoadmapAIService;
 import com.nexpath.dtos.request.*;
 import com.nexpath.dtos.response.*;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
+import reactor.core.publisher.Flux;
 import java.util.Map;
 
-@Service
-@RequiredArgsConstructor
-public class AiService {
+public interface AiService {
 
-    private final RoadmapAIService ai;
+    /**
+     * 🚀 Generates a career roadmap based on target role and skills.
+     */
+    RoadmapResponse generateRoadmap(RoadmapRequest request);
 
-    // =========================
-    // 🚀 ROADMAP
-    // =========================
-    public RoadmapResponse generateRoadmap(RoadmapRequest request) {
+    /**
+     * 🔍 Analyzes the gap between current skills and target role.
+     */
+    SkillGapResponse analyzeSkillGap(SkillGapRequest request);
 
-        Map<String, Object> map = ai.generateRoadmap(
-                "Student",
-                request.getTargetRole(),
-                request.getExperienceLevel(),
-                List.of(request.getCurrentSkills().split(",")),
-                "3-6 months"
-        );
+    /**
+     * 📄 Scores a resume text and providing improvement feedback.
+     */
+    ResumeScoreResponse scoreResume(ResumeScoreRequest request);
 
-        RoadmapResponse res = new RoadmapResponse();
-        res.setTitle((String) map.get("title"));
-        res.setSummary((String) map.get("summary"));
-        res.setEstimatedDuration((String) map.get("estimatedDuration"));
-        res.setPhases((List<Map<String, Object>>) map.get("phases"));
+    /**
+     * 📄 Unified resume parsing and analysis from a file.
+     */
+    Map<String, Object> parseAndAnalyzeResume(String resumeText, String targetRole);
 
-        return res;
-    }
+    /**
+     * 🌊 Streaming chat interface for authenticated users (Personalized).
+     */
+    Flux<String> streamChat(Long userId, String userMessage);
 
-    // =========================
-    // 🔍 SKILL GAP
-    // =========================
-    public SkillGapResponse analyzeSkillGap(SkillGapRequest request) {
+    /**
+     * 💬 Public chat interface (Generic).
+     */
+    String chatPublic(String userMessage);
 
-        Map<String, Object> map =
-                ai.analyzeSkillGap(request.getTargetRole(), request.getCurrentSkills());
-
-        SkillGapResponse res = new SkillGapResponse();
-        res.setMissingSkills((List<String>) map.get("missingSkills"));
-        res.setStrengths((List<String>) map.get("strengths"));
-        res.setRecommendations((List<String>) map.get("recommendations"));
-
-        return res;
-    }
-
-    // =========================
-    // 📄 RESUME SCORE
-    // =========================
-    public ResumeScoreResponse scoreResume(ResumeScoreRequest request) {
-
-        Map<String, Object> map =
-                ai.scoreResume(request.getResumeText(), "General Role");
-
-        ResumeScoreResponse res = new ResumeScoreResponse();
-        res.setScore((Integer) map.get("score"));
-        res.setWeaknesses((List<String>) map.get("weaknesses"));
-        res.setImprovements((List<String>) map.get("improvements"));
-        res.setAtsSuggestions((List<String>) map.get("atsSuggestions"));
-        res.setStrengths((List<String>) map.get("strengths"));
-
-        return res;
-    }
+    String chat(String s, String s1);
 }
