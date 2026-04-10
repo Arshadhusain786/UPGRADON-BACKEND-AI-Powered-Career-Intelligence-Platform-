@@ -21,6 +21,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import org.springframework.cache.annotation.Cacheable;
 import java.util.List;
 
 @Service
@@ -133,6 +134,7 @@ public class CreditService {
     // ─────────────────────────────────────────
     // Add free connections
     // ─────────────────────────────────────────
+    @CacheEvict(value = "user_credits", key = "#user.id")
     public void addFreeConnections(User user, int count, String transactionRef) {
         UserCredits credits = getOrCreateCredits(user);
         int current = (credits.getFreeConnectionsThisWeek() != null) ? credits.getFreeConnectionsThisWeek() : 0;
@@ -154,6 +156,7 @@ public class CreditService {
     // ─────────────────────────────────────────
     // Get current balance
     // ─────────────────────────────────────────
+    @Cacheable(value = "user_credits", key = "#user.id")
     public CreditBalanceResponse getBalance(User user) {
         UserCredits credits = getOrCreateCredits(user);
 

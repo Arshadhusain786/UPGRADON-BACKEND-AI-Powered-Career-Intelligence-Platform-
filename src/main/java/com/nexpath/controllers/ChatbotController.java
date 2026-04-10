@@ -32,14 +32,18 @@ public class ChatbotController {
     public ApiResponse<Map<String, String>> publicChat(
             @RequestBody Map<String, String> body) {
         String message = body.get("message");
+        String sessionId = body.get("sessionId");
         if (message == null || message.isBlank()) throw new BadRequestException("Message is required");
         
         try {
-            String response = aiService.chatPublic(message);
+            String response = (sessionId != null && !sessionId.isBlank()) 
+                ? aiService.chatPublicWithSession(sessionId, message)
+                : aiService.chatPublic(message);
+            
             return ApiResponse.success("Response generated", Map.of("reply", response != null ? response : "I'm having trouble responding right now."));
         } catch (Exception e) {
-            log.error("Public chat failed: {}", e.getMessage());
-            return ApiResponse.error("AI Service is busy or out of credits. Please try again later.");
+            log.error("Public chat failed: {}", e.getMessage(), e);
+            return ApiResponse.error("AI Service Error: " + e.getMessage());
         }
     }
 
@@ -53,16 +57,14 @@ public class ChatbotController {
         if (message == null || message.isBlank()) throw new BadRequestException("Message is required");
 
         User user = loadUser(userId);
-        final int COST = 1;
-        creditService.deductCredits(user, COST, CreditTransactionType.SPENT_CHAT, "AI Career Chat");
+        // Free chatbot - no deduction
         
         try {
             String response = aiService.chatPublic(message + "\n\nUser: " + user.getName()); 
             return ApiResponse.success("Response generated", Map.of("reply", response));
         } catch (Exception e) {
-            log.error("Authenticated chat failed for user {}: {}", userId, e.getMessage());
-            creditService.addCredits(user, COST, CreditTransactionType.REFUND, "Refund - Chat Failed", null);
-            throw new BadRequestException("AI Service is temporarily unavailable. 1 credit has been refunded.");
+            log.error("Authenticated chat failed for user {}: {}", userId, e.getMessage(), e);
+            throw new BadRequestException("AI Service Error: " + e.getMessage());
         }
     }
 
@@ -75,15 +77,10 @@ public class ChatbotController {
         String message = body.get("message");
         if (message == null || message.isBlank()) return Flux.just("ERROR: Message required");
         
-        User user = loadUser(userId);
-        final int COST = 1;
-        creditService.deductCredits(user, COST, CreditTransactionType.SPENT_CHAT, "AI Chat Stream");
-        
         return aiService.streamChat(userId, message)
                 .onErrorResume(e -> {
-                    log.error("Stream chat failed for user {}: {}", userId, e.getMessage());
-                    creditService.addCredits(user, COST, CreditTransactionType.REFUND, "Refund - Stream Chat Failed", null);
-                    return Flux.just("ERROR: AI Service Error. Credit refunded.");
+                    log.error("Stream chat failed for user {}: {}", userId, e.getMessage(), e);
+                    return Flux.just("\n\n[ERROR: AI Service is temporarily unavailable. Please try again later.]");
                 });
     }
 

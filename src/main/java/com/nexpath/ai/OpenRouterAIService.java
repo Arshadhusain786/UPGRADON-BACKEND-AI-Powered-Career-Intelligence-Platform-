@@ -6,12 +6,20 @@ import com.nexpath.services.AiService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.QuestionAnswerAdvisor;
+import org.springframework.ai.chat.memory.InMemoryChatMemory;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -24,6 +32,8 @@ public class OpenRouterAIService implements AiService {
 
     private final OpenAiChatModel chatModel;
     private final com.nexpath.repository.UserRepository userRepository;
+    private final InMemoryChatMemory chatMemory;
+    private final VectorStore vectorStore;
 
     /**
      * Sanitizes user-supplied text before embedding into AI prompts.
@@ -65,15 +75,18 @@ public class OpenRouterAIService implements AiService {
     }
 
     @Override
+    @Cacheable(value = "career_roadmaps", key = "#request.targetRole + #request.experienceLevel + #request.currentSkills")
     @Retryable(value = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
     public RoadmapResponse generateRoadmap(RoadmapRequest request) {
-        String system = "You are an expert career coach. Return ONLY JSON matching the RoadmapResponse structure.";
-        String user = String.format("Generate a career roadmap for target role: %s. Current Experience: %s. Current Skills: %s.",
-                request.getTargetRole(), request.getExperienceLevel(), request.getCurrentSkills());
-
         try {
-            return getChatClient().prompt()
-                    .messages(List.of(new SystemMessage(system), new UserMessage(sanitize(user))))
+            PromptTemplate template = new PromptTemplate(new ClassPathResource("prompts/roadmap.st"));
+            Map<String, Object> params = Map.of(
+                "targetRole", request.getTargetRole(),
+                "experienceLevel", request.getExperienceLevel(),
+                "currentSkills", request.getCurrentSkills()
+            );
+
+            return getChatClient().prompt(template.create(params))
                     .call()
                     .entity(RoadmapResponse.class);
         } catch (Exception e) {
@@ -83,14 +96,16 @@ public class OpenRouterAIService implements AiService {
     }
 
     @Override
+    @Cacheable(value = "skill_gaps", key = "#request.targetRole + #request.currentSkills")
     @Retryable(value = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
     public SkillGapResponse analyzeSkillGap(SkillGapRequest request) {
-        String system = "You are a tech recruiter. Return ONLY JSON matching the SkillGapResponse structure.";
-        String user = String.format("Analyze the skill gap for target role: %s. Current Skills: %s.",
-                request.getTargetRole(), request.getCurrentSkills());
+        PromptTemplate template = new PromptTemplate(new ClassPathResource("prompts/skillgap.st"));
+        Map<String, Object> params = Map.of(
+            "targetRole", request.getTargetRole(),
+            "currentSkills", request.getCurrentSkills()
+        );
 
-        return getChatClient().prompt()
-                .messages(List.of(new SystemMessage(system), new UserMessage(sanitize(user))))
+        return getChatClient().prompt(template.create(params))
                 .call()
                 .entity(SkillGapResponse.class);
     }
@@ -98,47 +113,115 @@ public class OpenRouterAIService implements AiService {
     @Override
     @Retryable(value = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
     public ResumeScoreResponse scoreResume(ResumeScoreRequest request) {
-        String system = "You are an AI ATS (Applicant Tracking System). Return ONLY JSON matching the ResumeScoreResponse structure.";
-        String user = String.format("Score this resume for the role: %s.\n\nResume Text:\n%s",
-                request.getTargetRole(), request.getResumeText());
+        PromptTemplate template = new PromptTemplate(new ClassPathResource("prompts/resumescore.st"));
+        Map<String, Object> params = Map.of(
+            "targetRole", request.getTargetRole(),
+            "resumeText", sanitize(request.getResumeText())
+        );
 
-        return getChatClient().prompt()
-                .messages(List.of(new SystemMessage(system), new UserMessage(sanitize(user))))
+        return getChatClient().prompt(template.create(params))
                 .call()
                 .entity(ResumeScoreResponse.class);
     }
 
     @Override
     public Map<String, Object> parseAndAnalyzeResume(String resumeText, String targetRole) {
-        String system = "Analyze the resume and return ONLY JSON with these keys: score (0-100), extractedSkills (array of strings), improvements (array of strings), and weaknesses (array of strings).";
-        String user = String.format("Analyze this resume for the role: %s.\n\nResume Content:\n%s",
-                targetRole != null ? targetRole : "General", resumeText);
+        PromptTemplate template = new PromptTemplate(new ClassPathResource("prompts/resumeparse.st"));
+        Map<String, Object> params = Map.of(
+            "targetRole", targetRole != null ? targetRole : "General",
+            "resumeText", sanitize(resumeText)
+        );
 
-        return getChatClient().prompt()
-                .messages(List.of(new SystemMessage(system), new UserMessage(sanitize(user))))
+        return getChatClient().prompt(template.create(params))
                 .call()
                 .entity(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {});
     }
 
     @Override
+    @Retryable(value = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
+    public JobEnhanceResponse enhanceJobDescription(JobEnhanceRequest request) {
+        PromptTemplate template = new PromptTemplate(new ClassPathResource("prompts/jobenhance.st"));
+        Map<String, Object> params = Map.of(
+            "title", request.getTitle(),
+            "description", sanitize(request.getDescription())
+        );
+
+        return getChatClient().prompt(template.create(params))
+                .call()
+                .entity(JobEnhanceResponse.class);
+    }
+
+    @Override
     public Flux<String> streamChat(Long userId, String userMessage) {
-        com.nexpath.models.User user = userRepository.findById(userId).orElse(null);
-        String context = PLATFORM_SYSTEM_PROMPT;
-        if (user != null) {
-            context += "\n\nUser: " + user.getName() + " (" + user.getRole() + ")";
+        String context = String.format("%s\n\n[USER CONTEXT]\n- User ID: %s\n- Real-time Actions: You can check the user's credit balance using the 'checkCredits' function.", PLATFORM_SYSTEM_PROMPT, userId);
+        String conversationId = "chat-" + userId;
+
+        try {
+            // Attempt RAG-powered chat first
+            return ChatClient.builder(chatModel)
+                    .defaultAdvisors(
+                            new MessageChatMemoryAdvisor(chatMemory, conversationId, 10),
+                            new QuestionAnswerAdvisor(vectorStore)
+                    )
+                    .build()
+                    .prompt()
+                    .messages(List.of(new SystemMessage(context), new UserMessage(sanitize(userMessage))))
+                    .stream()
+                    .content()
+                    .onErrorResume(e -> {
+                        log.warn("RAG stream failed, falling back to general chat: {}", e.getMessage());
+                        // Fallback: Continue without RAG advisor
+                        return getChatClient().prompt()
+                                .messages(List.of(new SystemMessage(context), new UserMessage(sanitize(userMessage))))
+                                .stream()
+                                .content();
+                    });
+        } catch (Exception e) {
+            log.error("Fatal error creating ChatClient: {}", e.getMessage());
+            return Flux.just("\n\n[ERROR: AI Service is temporarily unavailable. Please try again later.]");
         }
-        return getChatClient().prompt()
-                .messages(List.of(new SystemMessage(context), new UserMessage(sanitize(userMessage))))
-                .stream()
-                .content();
     }
 
     @Override
     public String chatPublic(String userMessage) {
-        return getChatClient().prompt()
-                .messages(List.of(new SystemMessage(PLATFORM_SYSTEM_PROMPT), new UserMessage(sanitize(userMessage))))
-                .call()
-                .content();
+        try {
+            return getChatClient().prompt()
+                    .messages(List.of(new SystemMessage(PLATFORM_SYSTEM_PROMPT), new UserMessage(sanitize(userMessage))))
+                    .call()
+                    .content();
+        } catch (Exception e) {
+            log.error("AI chatPublic failed: {}", e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @Override
+    public String chatPublicWithSession(String sessionId, String userMessage) {
+        try {
+            String conversationId = "public-" + sessionId;
+            try {
+                // Try RAG first
+                return ChatClient.builder(chatModel)
+                        .defaultAdvisors(
+                                new MessageChatMemoryAdvisor(chatMemory, conversationId, 5),
+                                new QuestionAnswerAdvisor(vectorStore)
+                        )
+                        .build()
+                        .prompt()
+                        .messages(List.of(new SystemMessage(PLATFORM_SYSTEM_PROMPT), new UserMessage(sanitize(userMessage))))
+                        .call()
+                        .content();
+            } catch (Exception ragEx) {
+                log.warn("Public RAG chat failed, falling back to general: {}", ragEx.getMessage());
+                return getChatClient().prompt()
+                        .messages(List.of(new SystemMessage(PLATFORM_SYSTEM_PROMPT), new UserMessage(sanitize(userMessage))))
+                        .call()
+                        .content();
+            }
+        } catch (Exception e) {
+            log.error("AI chatPublicWithSession failed: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
     @Override

@@ -14,5 +14,7 @@ public enum CreditTransactionType {
     CONNECTION_REFUNDED,
     HIRE_REWARD,
     BOOST_POST,
-    REFUND
+    REFUND,
+    AI_GENERATION,
+    SPENT_ENHANCE
 }

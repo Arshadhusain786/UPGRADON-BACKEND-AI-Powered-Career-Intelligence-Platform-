@@ -1,0 +1,29 @@
+# Upgradon Platform — Official Knowledge Base
+
+Upgradon is an AI-powered career intelligence platform that bridges the gap between academics and industry.
+
+## Features & Credit Costs
+- **AI Career Roadmap**: Generates a step-by-step path to your target role.
+  - Cost: 5 credits per generation.
+- **Skill Gap Analysis**: Identifies missing skills and provides a learning plan.
+  - Cost: 3 credits per analysis.
+- **Resume Optimizer (Score)**: Scores your resume and provides ATS improvement tips.
+  - Cost: 4 credits per score.
+- **Resume Upload**: Upload PDF/DOCX for deep AI parsing and analysis.
+  - Cost: 4 credits per upload.
+- **AI Career Chatbot**: Real-time professional guidance and platform support.
+  - Cost: 1 credit per message (Authenticated). Public chat is free but has shorter memory.
+
+## Credit System
+- **Signup Bonus**: New users receive 20 free credits upon registration.
+- **Daily Refill**: Active users receive 10 free credits every day at midnight (UTC).
+- **Referral Bonus**: Invite a friend using your unique link in the 'Referrals' tab. When they sign up, both of you earn +10 bonus credits.
+- **Contribution Rewards**: Mark an applicant as 'Hired' on your Opportunity Board post to earn +5 reward credits.
+
+## Opportunity Board
+- You can post opportunities (Job/Internship/Project) for free.
+- To connect with a poster, users must spend 1 connection credit (or use their free weekly limit).
+- Credits are locked during the 'Pending' state and refunded if the request is 'Rejected' or 'Cancelled'.
+
+## Contact & Support
+For technical issues, contact support@upgradon.ai or use the Chatbot for immediate assistance.

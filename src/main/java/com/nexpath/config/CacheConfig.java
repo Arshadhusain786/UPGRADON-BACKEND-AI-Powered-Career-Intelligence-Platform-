@@ -1,21 +1,30 @@
 package com.nexpath.config;
 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.springframework.cache.CacheManager;
-import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
+import org.springframework.cache.caffeine.CaffeineCacheManager;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.cache.annotation.EnableCaching;
+
+import java.util.concurrent.TimeUnit;
 
 /**
- * 🛠️ CACHE CONFIGURATION
- * Replaces Redis with a simple in-memory ConcurrentMapCacheManager.
- * This satisfies any dependencies on 'cacheManager' without requiring a Redis server.
+ * 🚀 PREMIUM CACHE CONFIGURATION
+ * Uses Caffeine for high-performance in-memory caching with TTL and size limits.
  */
 @Configuration
+@EnableCaching
 public class CacheConfig {
 
     @Bean
     public CacheManager cacheManager() {
-        return new ConcurrentMapCacheManager("user_credits", "career_roadmaps", "skill_gaps");
+        CaffeineCacheManager cacheManager = new CaffeineCacheManager();
+        cacheManager.setCaffeine(Caffeine.newBuilder()
+                .initialCapacity(100)
+                .maximumSize(500)
+                .expireAfterWrite(10, TimeUnit.MINUTES)
+                .recordStats());
+        return cacheManager;
     }
 }

@@ -11,15 +11,14 @@ import com.nexpath.services.CreditService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.reader.tika.TikaDocumentReader;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.Map;
-import java.nio.charset.StandardCharsets;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.text.PDFTextStripper;
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -135,18 +134,11 @@ public class AiController {
         creditService.deductCredits(user, COST, CreditTransactionType.SPENT_RESUME, "Resume Upload Analysis");
 
         try {
-            String content;
-            String filename = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase() : "";
-            
-            if (filename.endsWith(".pdf")) {
-                try (PDDocument document = Loader.loadPDF(file.getBytes())) {
-                    PDFTextStripper stripper = new PDFTextStripper();
-                    content = stripper.getText(document);
-                }
-            } else {
-                // Default fallback for .txt or other raw text files
-                content = new String(file.getBytes(), StandardCharsets.UTF_8);
-            }
+            Resource resource = new ByteArrayResource(file.getBytes());
+            TikaDocumentReader reader = new TikaDocumentReader(resource);
+            String content = reader.get().stream()
+                    .map(doc -> doc.getContent())
+                    .collect(Collectors.joining("\n"));
 
             if (content == null || content.isBlank()) {
                 throw new BadRequestException("Could not extract any text from the uploaded file.");

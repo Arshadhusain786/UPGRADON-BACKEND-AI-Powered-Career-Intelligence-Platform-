@@ -1,8 +1,15 @@
 package com.nexpath.controllers;
 
 import com.nexpath.dtos.request.CreatePostRequest;
+import com.nexpath.dtos.request.JobEnhanceRequest;
 import com.nexpath.dtos.response.ApiResponse;
+import com.nexpath.dtos.response.JobEnhanceResponse;
 import com.nexpath.dtos.response.OpportunityPostResponse;
+import com.nexpath.enums.CreditTransactionType;
+import com.nexpath.models.User;
+import com.nexpath.repository.UserRepository;
+import com.nexpath.services.AiService;
+import com.nexpath.services.CreditService;
 import com.nexpath.services.OpportunityPostService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +26,9 @@ import org.springframework.web.bind.annotation.*;
 public class OpportunityPostController {
 
     private final OpportunityPostService postService;
+    private final AiService aiService;
+    private final CreditService creditService;
+    private final UserRepository userRepository;
 
     @PostMapping
     @PreAuthorize("isAuthenticated()")
@@ -27,6 +37,23 @@ public class OpportunityPostController {
             @Valid @RequestBody CreatePostRequest req) {
         log.info("Received request to create opportunity: {} from user: {}", req.getTitle(), userId);
         return ApiResponse.success("Opportunity posted", postService.createPost(userId, req));
+    }
+
+    @PostMapping("/enhance")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<JobEnhanceResponse> enhancePost(
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody JobEnhanceRequest req) {
+        log.info("Enhancing job post: {} for user: {}", req.getTitle(), userId);
+        
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Deduct 1 credit for enhancement
+        creditService.deductCredits(user, 1, CreditTransactionType.AI_GENERATION, "Job description enhancement");
+
+        JobEnhanceResponse response = aiService.enhanceJobDescription(req);
+        return ApiResponse.success("Description enhanced", response);
     }
 
     @GetMapping

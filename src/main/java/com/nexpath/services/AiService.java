@@ -37,5 +37,15 @@ public interface AiService {
      */
     String chatPublic(String userMessage);
 
+    /**
+     * 💬 Public chat interface with session memory.
+     */
+    String chatPublicWithSession(String sessionId, String userMessage);
+
     String chat(String s, String s1);
+
+    /**
+     * 💼 Enhances a job description to be more professional.
+     */
+    JobEnhanceResponse enhanceJobDescription(JobEnhanceRequest request);
 }
